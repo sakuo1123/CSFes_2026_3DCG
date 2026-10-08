@@ -85,6 +85,25 @@
       opacity: 1
     }
 
+    /* 透過キャラ。非表示のときは上にずらして透明にしておく → 出るときに下りてくる */
+    #overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(-3%);
+      transition: transform .4s cubic-bezier(.2, .8, .2, 1), opacity .45s
+    }
+
+    .finished #overlay.show {
+      opacity: 1;
+      transform: none
+    }
+
     /* ★アイコン位置（フレーム内の % 。left/top を変えるだけ。--s は大きさ） */
     .c1 {
       left: 56%;
@@ -125,13 +144,14 @@
 
     /* 範囲外のアイコンは消す（ふわっと小さくなって、タップも無効） */
     .ui .ic {
-      transition: transform .2s, opacity .45s
+      transition: transform .55s cubic-bezier(.2, 1.5, .4, 1), opacity .4s, box-shadow .55s
     }
 
     .ui .ic.away {
       opacity: 0;
       pointer-events: none;
-      transform: scale(.85)
+      transform: scale(.35);
+      box-shadow: none
     }
 
     #loading {
@@ -812,11 +832,11 @@
       <div class="frame" id="stage">
         <!-- 動画（終了後も最終フレームのまま残る）。ファイル名はここ -->
         <video id="introVideo" muted playsinline preload="auto">
-          <source src="movie/opening_v2.mp4" type="video/mp4">
+          <source src="movie/opening_v3_2.mp4" type="video/mp4">
         </video>
         <!-- 連番画像（028から開始） -->
         <canvas id="view"></canvas>
-        <div class="ui">
+        <canvas id="overlay"></canvas>
           <div class="ui">
             <button class="ic ripple c3" data-circle="circle3"
               aria-label="仮想空間研究会">サークル<br>アイコン3<small>(仮想空間研究会)</small><span class="ic-label">仮想空間研究会</span></button>
@@ -826,6 +846,7 @@
               aria-label="ゲーム研究会">サークル<br>アイコン1<small>(ゲーム研究会)</small><span class="ic-label">ゲーム研究会</span></button>
             <button class="scrollbtn" data-scroll>scroll<b>↓</b></button>
           </div>
+
           <div class="room-label" id="roomLabel"></div>
         </div>
         <div id="guide">← SWIPE TO EXPLORE →</div>
@@ -927,28 +948,34 @@
     /* ================= 連番画像の設定（ここだけ編集すればOK） ================= */
     const CONFIG = {
       imageFolder: "./Renban/",     // 画像フォルダ（index.html からの相対パス。最後に / を付ける）
-      imageWidth: 480,            // ★画像の幅(px)。表示枠の縦横比がこの2つで決まる
-      imageHeight: 720,           // ★画像の高さ(px)
+      imageWidth: 720,            // ★画像の幅(px)。表示枠の縦横比がこの2つで決まる
+      imageHeight: 1080,           // ★画像の高さ(px)
       imageFit: "cover",          // "cover"＝枠いっぱい（はみ出しはカット） / "contain"＝全体を収める（余白あり）。引き伸ばしはしません
       firstFrame: 400,            // 最初の番号（左端）
-      lastFrame: 450,             // 最後の番号（右端）
-      startFrame: 428,            // 初期フレーム（動画の最終フレームと同じ画像）
+      lastFrame: 500,             // 最後の番号（右端）
+      startFrame: 450,            // 初期フレーム（動画の最終フレームと同じ画像）
       imageExtension: ".jpg",     // 拡張子
       digits: 4,                  // 番号の桁数。400.jpg なら 0。0400.jpg のように0埋めするなら 4
       reverseDirection: false,    // true にすると左右の操作方向が逆になる
       swipeSensitivity: 1.0,      // スワイプ感度（大きいほど少ない指の動きで進む）
-      framesPerScreen: 50,        // 感度1.0のとき、画面幅いっぱいスワイプで動くコマ数
-      guideSeconds: 4,            // 「SWIPE TO EXPLORE」を表示する秒数
+      framesPerScreen: 50,        // 感度1.0のとき、画面幅いっぱいスワイプで動くコマ数       
       /* ★アイコンを表示するコマ番号の範囲 [から, まで]。範囲外ではふわっと消えてタップもできなくなる */
       iconRanges: {
-        circle3: [400, 420],      // 仮想空間研究会
-        circle2: [435, 450],      // 3DCG同好会
-        circle1: [435, 450]       // ゲーム研究会
+        circle3: [400, 435],      // 仮想空間研究会
+        circle2: [465, 500],      // 3DCG同好会
+        circle1: [465, 500],       // ゲーム研究会
+      },
+      /* ★透過キャラ（背景と同じ番号の画像を重ねる） */
+      overlay: {
+        folder: "./Chara/",                    // 透過画像のフォルダ
+        extension: ".webp",                    // .webp または .png
+        digits: 4,                             // 番号の桁数（0400.webp なら 4）
+        ranges: [[400, 435], [465, 500]]       // 表示するコマ番号の範囲
       },
       /* ★教室名を表示するコマ番号の範囲。範囲に入ると text が出る */
       roomLabels: [
-        { text: "4B教室", range: [400, 425] },   // 左を見ているとき
-        { text: "4A教室", range: [431, 450] }    // 右を見ているとき
+        {text: "4B教室", range: [400, 435]},   // 左を見ているとき
+        {text: "4A教室", range: [465, 500]}    // 右を見ているとき
       ]
     };
 
@@ -957,11 +984,15 @@
     const cv = $("view"), ctx = cv.getContext("2d");
     cv.width = CONFIG.imageWidth; cv.height = CONFIG.imageHeight;
     stage.style.setProperty("--ratio", CONFIG.imageWidth / CONFIG.imageHeight);
+    const ovCv = $("overlay"), ovCtx = ovCv.getContext("2d");
+    ovCv.width = CONFIG.imageWidth; ovCv.height = CONFIG.imageHeight;
+    const ovImgs = {}, ovOk = n => ovImgs[n] && ovImgs[n].complete && ovImgs[n].naturalWidth > 0;
+    let ovDrawn = -1;
     const imgs = {}, okImg = n => imgs[n] && imgs[n].complete && imgs[n].naturalWidth > 0;
     let loaded = 0, drawn = 0, pos = CONFIG.startFrame;
     $("loadT").textContent = total;
     const order = [CONFIG.startFrame];
-    for (let d = 1; d < total; d++) { if (CONFIG.startFrame - d >= F1) order.push(CONFIG.startFrame - d); if (CONFIG.startFrame + d <= F2) order.push(CONFIG.startFrame + d); }
+    for (let d = 1; d < total; d++) {if (CONFIG.startFrame - d >= F1) order.push(CONFIG.startFrame - d); if (CONFIG.startFrame + d <= F2) order.push(CONFIG.startFrame + d);}
     /* 動画を優先するため、画像の先読みは「動画が再生できる状態になってから」始める。
        同時に読み込む枚数も制限して、スマホの回線・メモリを圧迫しないようにする */
     const PRELOAD_PARALLEL = 4;      // ★同時に読み込む枚数（スマホが重いなら 2 に下げる）
@@ -969,6 +1000,9 @@
     function loadNext() {
       if (queueIdx >= order.length) return;
       const n = order[queueIdx++], im = new Image(); imgs[n] = im;
+      const o = new Image(); ovImgs[n] = o;
+      o.onload = () => {ovDrawn = -1; updateOverlay(Math.round(pos));};
+      o.src = CONFIG.overlay.folder + String(n).padStart(CONFIG.overlay.digits, "0") + CONFIG.overlay.extension;
       im.onload = im.onerror = () => {
         $("loadN").textContent = ++loaded;
         if (loaded >= total) $("loading").classList.add("done");
@@ -982,8 +1016,20 @@
       if (preloadStarted) return; preloadStarted = true;
       for (let i = 0; i < PRELOAD_PARALLEL; i++) loadNext();
     }
-    video.addEventListener("canplaythrough", startPreload, { once: true });
+    video.addEventListener("canplaythrough", startPreload, {once: true});
     setTimeout(startPreload, 8000);   // 動画の準備が遅くても8秒後には画像の読み込みを始める
+    /* 透過キャラを出し入れして、今のコマの画像を描く */
+    function updateOverlay(n) {
+      const on = CONFIG.overlay.ranges.some(r => n >= r[0] && n <= r[1]);
+      ovCv.classList.toggle("show", on);
+      if (!on || n === ovDrawn) return;
+      for (let d = 0; d < total; d++) for (const k of [n - d, n + d]) if (ovOk(k)) {
+        const im = ovImgs[k], sc = (CONFIG.imageFit === "contain" ? Math.min : Math.max)(ovCv.width / im.naturalWidth, ovCv.height / im.naturalHeight);
+        ovCtx.clearRect(0, 0, ovCv.width, ovCv.height);
+        ovCtx.drawImage(im, (ovCv.width - im.naturalWidth * sc) / 2, (ovCv.height - im.naturalHeight * sc) / 2, im.naturalWidth * sc, im.naturalHeight * sc);
+        ovDrawn = k; return;
+      }
+    }
     /* 現在のコマ番号に応じて、アイコンを出し入れする */
     function updateIcons(n) {
       document.querySelectorAll(".ic[data-circle]").forEach(b => {
@@ -992,7 +1038,7 @@
       });
       const rl = CONFIG.roomLabels.find(r => n >= r.range[0] && n <= r.range[1]);
       const el = $("roomLabel");
-      if (rl) { if (el.textContent !== rl.text) el.textContent = rl.text; el.classList.add("on"); }
+      if (rl) {if (el.textContent !== rl.text) el.textContent = rl.text; el.classList.add("on");}
       else el.classList.remove("on");
     }
     /* 縦横比を保ったまま描く（実際の画像サイズが設定と違っても引き伸ばさない） */
@@ -1005,8 +1051,9 @@
     /* 現在のコマを描く（未読み込みなら近い読み込み済みコマで代用） */
     function render() {
       const n = Math.round(pos); updateIcons(n);
+      updateOverlay(n);
       if (n === drawn || !cv.width) return;
-      for (let d = 0; d < total; d++) for (const k of [n - d, n + d]) if (okImg(k)) { draw(imgs[k]); drawn = k; return; }
+      for (let d = 0; d < total; d++) for (const k of [n - d, n + d]) if (okImg(k)) {draw(imgs[k]); drawn = k; return;}
     }
 
     /* ---- スワイプ / ドラッグ（指を離したらその場で停止。慣性・自動復帰なし） ---- */
@@ -1014,7 +1061,7 @@
     stage.addEventListener("pointerdown", e => {
       moved = false;
       if (!world.classList.contains("finished") || modal.classList.contains("open") || (e.pointerType === "mouse" && e.button !== 0)) return;
-      drag = { id: e.pointerId, x: e.clientX, x0: e.clientX };
+      drag = {id: e.pointerId, x: e.clientX, x0: e.clientX};
     });
     addEventListener("pointermove", e => {
       if (!drag || e.pointerId !== drag.id) return;
@@ -1023,21 +1070,22 @@
       pos = Math.min(F2, Math.max(F1, pos + dx * k));   // 指の動き＝回転量
       render();
     });
-    ["pointerup", "pointercancel"].forEach(t => addEventListener(t, () => { drag = null; }));
-    stage.addEventListener("click", e => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true); // スワイプ後の誤タップ防止
+    ["pointerup", "pointercancel"].forEach(t => addEventListener(t, () => {drag = null;}));
+    stage.addEventListener("click", e => {if (moved) {e.stopPropagation(); e.preventDefault(); moved = false;} }, true); // スワイプ後の誤タップ防止
     stage.addEventListener("dragstart", e => e.preventDefault());
 
     /* ---- 探索ガイド ---- */
     let guideTimer;
-    function showGuide() { $("guide").classList.add("show"); }
-    function hideGuide() { clearTimeout(guideTimer); $("guide").classList.remove("show"); }
+    function showGuide() {$("guide").classList.add("show");}
+    function hideGuide() {clearTimeout(guideTimer); $("guide").classList.remove("show");}
 
-    document.querySelectorAll("[data-scroll]").forEach(b => b.onclick = () => $("info").scrollIntoView({ behavior: "smooth" }));
-    addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+    document.querySelectorAll("[data-scroll]").forEach(b => b.onclick = () => $("info").scrollIntoView({behavior: "smooth"}));
+    addEventListener("keydown", e => {if (e.key === "Escape") closeModal();});
 
     /* ---- オープニング ---- */
     function finish() {
       if (world.classList.contains("finished")) return;
+      startPreload();   // スキップや動画エラーでも、画像の読み込みをすぐ始める
       pos = CONFIG.startFrame; drawn = 0; render();   // 探索は必ず028から
       showGuide();
       world.classList.remove("playing");
@@ -1054,7 +1102,7 @@
     setInterval(() => {
       if (!world.classList.contains("playing")) return;
       stuck = video.currentTime === lastT ? stuck + 1 : 0; lastT = video.currentTime;
-      if (stuck >= 8) { video.pause(); finish(); }
+      if (stuck >= 8) {video.pause(); finish();}
     }, 1000);
     attention.onclick = start;
     $("skip").onclick = () => {
@@ -1098,7 +1146,7 @@
     });
     document.querySelectorAll("[data-circle]").forEach(b => b.onclick = () => openCircle(b.dataset.circle));
     $("close").onclick = closeModal;
-    modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
+    modal.addEventListener("click", e => {if (e.target === modal) closeModal();});
 
     /* ---- 円アイコンに画像があれば表示 ---- */
     Object.entries(circleData).forEach(([id, d]) => {
@@ -1107,7 +1155,7 @@
     });
 
     /* ---- スクロール表示 ---- */
-    const io = new IntersectionObserver(es => es.forEach(e => e.isIntersecting && e.target.classList.add("visible")), { threshold: .2 });
+    const io = new IntersectionObserver(es => es.forEach(e => e.isIntersecting && e.target.classList.add("visible")), {threshold: .2});
     document.querySelectorAll(".reveal").forEach(el => io.observe(el));
   </script>
 </body>
