@@ -1006,7 +1006,7 @@
       im.onload = im.onerror = () => {
         $("loadN").textContent = ++loaded;
         if (loaded >= total) $("loading").classList.add("done");
-        if (loaded >= total && waitingForImages) { waitingForImages = false; tryfinish(); }
+        if (loaded >= total && waitingForImages) { waitingForImages = false; finish(); }
         if (n === CONFIG.startFrame && im.naturalWidth) cv.classList.add("ready");
         drawn = 0; render();
         loadNext();
@@ -1116,7 +1116,7 @@ function tryFinish() {
     $("skip").onclick = () => {
       video.pause();
       if (video.duration) video.currentTime = video.duration - 0.05; // 最終フレーム（トップページ）を表示
-      finish();
+      tryFinish();
     };
     video.addEventListener("ended", () => setTimeout(tryFinish, 250));
     video.addEventListener("error", tryFinish);
