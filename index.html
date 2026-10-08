@@ -952,7 +952,7 @@
       imageHeight: 1080,           // ★画像の高さ(px)
       imageFit: "cover",          // "cover"＝枠いっぱい（はみ出しはカット） / "contain"＝全体を収める（余白あり）。引き伸ばしはしません
       firstFrame: 400,            // 最初の番号（左端）
-      lastFrame: 500,             // 最後の番号（右端）
+      lastFrame: 499,             // 最後の番号（右端）
       startFrame: 450,            // 初期フレーム（動画の最終フレームと同じ画像）
       imageExtension: ".jpg",     // 拡張子
       digits: 4,                  // 番号の桁数。400.jpg なら 0。0400.jpg のように0埋めするなら 4
@@ -962,20 +962,20 @@
       /* ★アイコンを表示するコマ番号の範囲 [から, まで]。範囲外ではふわっと消えてタップもできなくなる */
       iconRanges: {
         circle3: [400, 435],      // 仮想空間研究会
-        circle2: [465, 500],      // 3DCG同好会
-        circle1: [465, 500],       // ゲーム研究会
+        circle2: [465, 499],      // 3DCG同好会
+        circle1: [465, 499],       // ゲーム研究会
       },
       /* ★透過キャラ（背景と同じ番号の画像を重ねる） */
       overlay: {
         folder: "./Chara/",                    // 透過画像のフォルダ
         extension: ".webp",                    // .webp または .png
         digits: 4,                             // 番号の桁数（0400.webp なら 4）
-        ranges: [[400, 435], [465, 500]]       // 表示するコマ番号の範囲
+        ranges: [[400, 435], [465, 499]]       // 表示するコマ番号の範囲
       },
       /* ★教室名を表示するコマ番号の範囲。範囲に入ると text が出る */
       roomLabels: [
         {text: "4B教室", range: [400, 435]},   // 左を見ているとき
-        {text: "4A教室", range: [465, 500]}    // 右を見ているとき
+        {text: "4A教室", range: [465, 499]}    // 右を見ているとき
       ]
     };
 
@@ -996,7 +996,7 @@
     /* 動画を優先するため、画像の先読みは「動画が再生できる状態になってから」始める。
        同時に読み込む枚数も制限して、スマホの回線・メモリを圧迫しないようにする */
     const PRELOAD_PARALLEL = 4;      // ★同時に読み込む枚数（スマホが重いなら 2 に下げる）
-    let queueIdx = 0, preloadStarted = false;
+    let queueIdx = 0, preloadStarted = false, waitingForImages = false;
     function loadNext() {
       if (queueIdx >= order.length) return;
       const n = order[queueIdx++], im = new Image(); imgs[n] = im;
@@ -1006,6 +1006,7 @@
       im.onload = im.onerror = () => {
         $("loadN").textContent = ++loaded;
         if (loaded >= total) $("loading").classList.add("done");
+        if (loaded >= total && waitingForImages) { waitingForImages = false; tryfinish(); }
         if (n === CONFIG.startFrame && im.naturalWidth) cv.classList.add("ready");
         drawn = 0; render();
         loadNext();
@@ -1092,17 +1093,24 @@
       world.classList.add("finished");
       document.body.classList.remove("lock");
     }
+    /* 動画が終わったら、連番画像の読み込みが終わるまで最後のフレームで待ってから探索画面へ */
+function tryFinish() {
+  startPreload();
+  if (loaded >= total) { waitingForImages = false; finish(); return; }
+  waitingForImages = true;
+  world.classList.remove("playing");   // 待っている間はスキップボタンを隠す
+}
     function start() {
       attention.classList.add("hidden");
       world.classList.add("playing");
-      video.play().catch(finish);
+      video.play().catch(tryFinish);
     }
     /* 動画が8秒進まない（回線が遅い等）場合は、待たずに探索画面へ進む */
     let lastT = -1, stuck = 0;
     setInterval(() => {
       if (!world.classList.contains("playing")) return;
       stuck = video.currentTime === lastT ? stuck + 1 : 0; lastT = video.currentTime;
-      if (stuck >= 8) {video.pause(); finish();}
+      if (stuck >= 8) {video.pause(); tryFinish();}
     }, 1000);
     attention.onclick = start;
     $("skip").onclick = () => {
@@ -1110,8 +1118,8 @@
       if (video.duration) video.currentTime = video.duration - 0.05; // 最終フレーム（トップページ）を表示
       finish();
     };
-    video.addEventListener("ended", () => setTimeout(finish, 250));
-    video.addEventListener("error", finish);
+    video.addEventListener("ended", () => setTimeout(tryFinish, 250));
+    video.addEventListener("error", tryFinish);
 
     /* ---- ポップアップ ---- */
     function openCircle(id) {
